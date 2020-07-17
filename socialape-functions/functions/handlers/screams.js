@@ -73,10 +73,14 @@ exports.getScream = (req, res) => {
         .get();
     })
     .then((data) => {
+      console.log(data);
       screamData.comments = [];
+      console.log("goods");
       data.forEach((doc) => {
+        console.log(doc.data());
         screamData.comments.push(doc.data());
       });
+      console.log("oks");
       return res.json(screamData);
     })
     .catch((err) => {
@@ -112,30 +116,43 @@ exports.deleteScream = (req, res) => {
 // Add comment on a scream
 exports.commentOnScream = (req, res) => {
   if (req.body.body.trim() === "") {
-    return res.status(400).json({ error: "Must not be empty" });
+    return res.status(400).json({ comment: "Must not be empty" });
   }
 
   const newComment = {
     body: req.body.body,
-    createdId: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
     screamId: req.params.screamId,
     userHandle: req.user.handle,
     userImage: req.user.imageUrl,
   };
 
-  db.doc(`/screams/${req.params.screamId}`)
+  const screamDocument = db.doc(`/screams/${req.params.screamId}`);
+
+  const resData = {};
+
+  screamDocument
     .get()
     .then((doc) => {
       if (!doc.exists) {
         return res.status(404).json({ error: "Scream not found" });
+      } else {
+        resData.scream = doc.data();
+        resData.scream.screamId = doc.id;
+        return db
+          .collection("comments")
+          .add(newComment)
+          .then(() => {
+            resData.scream.commentCount = doc.data().commentCount + 1;
+            screamDocument.update({
+              commentCount: resData.scream.commentCount,
+            });
+          });
       }
-      return doc.ref.update({ commentCount: doc.data().commentCount + 1 });
     })
     .then(() => {
-      return db.collection("comments").add(newComment);
-    })
-    .then(() => {
-      res.json({ newComment });
+      resData.comment = newComment;
+      res.json(resData);
     })
     .catch((err) => {
       console.error(err);
